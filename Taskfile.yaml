@@ -1,0 +1,29 @@
+version: '3'
+
+tasks:
+  default:
+    desc: "タスク一覧"
+    cmds:
+      - task --list
+
+  ingest:
+    desc: "開発環境の全体像を出力"
+    vars:
+      FILE:
+        # OS差分を吸収するため、Pythonで記述
+        sh: uv run python -c "import datetime; print(f'digest_{datetime.datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.txt')"
+    cmds:
+      - gitingest . -e "uv.lock,.python-version" -o "{{.FILE}}"
+      - echo "Created {{.FILE}}"
+
+  run:
+    desc: "ツールの起動"
+    cmds:
+      - uv run marimo run src --watch
+
+  test:
+    desc: "この品質を満たすこと"
+    cmds:
+      - uv run pymarkdownlnt fix README.md
+      - uv run pytest -n auto --cov=src --cov-fail-under=90 --cov-report=html:coverage
+
