@@ -16,3 +16,4 @@ coverage/
 .coverage
 .marimo/
 .pytest_cache/
+tmp/
