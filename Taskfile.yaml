@@ -21,9 +21,15 @@ tasks:
     cmds:
       - uv run marimo run src --watch
 
+  lint:
+    desc: "静的解析"
+    cmds:
+      - uv run pymarkdownlnt fix README.md
+      - uv run marimo check src/apps/ --fix
+
   test:
     desc: "この品質を満たすこと"
     cmds:
-      - uv run pymarkdownlnt fix README.md
-      - uv run pytest -n auto --cov=src --cov-fail-under=90 --cov-report=html:coverage
+      - task: lint
+      - uv run pytest -n auto --cov=src/core --cov-fail-under=90 --cov-report=html:coverage
 
