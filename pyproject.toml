@@ -1,3 +1,10 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
 [project]
 name = "tools"
 version = "0.1.0"
@@ -51,7 +58,10 @@ root_package = "src"
 name = "モジュール依存関係"
 type = "layers"
 layers = [
-    "apps",
-    "components",
-    "core",
+    "src.apps",
+    "src.components",
+    "src.core",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

@@ -11,10 +11,12 @@ tasks:
     cmds:
       - uv run python scripts/ingest.py
 
-  run:
+  app:
     desc: "ツールの起動"
+    env:
+      PYTHONPATH: .
     cmds:
-      - uv run marimo run src --watch
+      - uv run marimo run src/apps --watch
 
   lint:
     desc: "静的解析"
