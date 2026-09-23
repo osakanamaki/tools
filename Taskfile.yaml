@@ -23,6 +23,7 @@ tasks:
     cmds:
       - uv run pymarkdownlnt scan docs/*.md README.md
       - uv run lint-imports --no-logo
+      - uv run ruff format --check .
       - uv run ruff check .
       - uv run ty check
       - uv run marimo check src/apps/ --fix
@@ -33,4 +34,4 @@ tasks:
       - task: lint
       # ロジックテストのみ網羅する。
       # GUI層は人間によるレビューを優先する。
-      - uv run pytest -n auto --cov=src/core --cov-fail-under=95 --cov-report=html:coverage
+      - uv run pytest -n auto --cov=src/core --cov=src/components --cov-fail-under=95 --cov-report=html:coverage

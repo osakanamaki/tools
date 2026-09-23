@@ -1,2 +1,1 @@
 """Personal utility ツールパッケージ。"""
-

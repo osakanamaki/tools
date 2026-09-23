@@ -12,10 +12,14 @@ description = "Personal utility"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "marimo>=0.24.2",
+]
+
+[dependency-groups]
+dev = [
     "gitingest>=0.3.1",
     "go-task-bin>=3.53.1",
     "import-linter>=2.15",
-    "marimo>=0.24.2",
     "pymarkdownlnt>=0.9.40",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -41,6 +45,10 @@ lint.select = [
     "D101",
     "D103",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# marimo セルは末尾の式を出力として表示する / 依存を張るため式文を多用する
+"src/apps/*" = ["B018"]
 
 
 [tool.ty]

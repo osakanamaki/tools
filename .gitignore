@@ -13,7 +13,8 @@ wheels/
 .env
 digest_*.txt
 coverage/
-.coverage
+.coverage*
 .marimo/
+__marimo__/
 .pytest_cache/
 tmp/

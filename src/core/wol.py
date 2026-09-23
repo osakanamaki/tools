@@ -29,4 +29,3 @@ def send_magic_packet(
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.sendto(magic_packet, (broadcast_address, port))
-

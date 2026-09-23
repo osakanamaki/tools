@@ -23,6 +23,7 @@ RDP_HOST=192.168.1.100
 
 * `src/core` -> ロジックを記述する。
 * `src/apps` -> GUIを記述する。core機能を注入する。
+* `src/components` -> 複数アプリで共有するUI部品を記述する。
 * ドキュメント
   * **What / How**: ソースコード上Docstring
   * **Why / Context**: `docs/adr_*.md`
