@@ -9,11 +9,19 @@ import argparse
 import ast
 import re
 import sys
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_APPS_DIR = Path("src/apps")
 DEFAULT_OUT_DIR = Path("docs/flows")
+# GitHub の本文幅で文字が縮小されないよう、浅く広い DAG は横向きに描く
+DEFAULT_DIRECTION = "LR"
+# ラベルを折り返す表示幅 (半角 1・全角 2 で数える)
+DEFAULT_WRAP_WIDTH = 30
+
+# 行頭に置かない文字 (行頭禁則)
+_NO_LINE_START = frozenset("、。，．,.）)」』】〕！？!?ー")
 
 # Mermaid のラベル内で特別な意味を持つ文字を数値エンティティへ置換する
 _MERMAID_ESCAPES = {"#": "#35;", '"': "#34;", "&": "#38;", "<": "#60;", ">": "#62;"}
@@ -396,26 +404,73 @@ def escape_label(text: str) -> str:
     return re.sub(r'[#"&<>]', lambda m: _MERMAID_ESCAPES[m.group()], text)
 
 
-def _cell_title(cell: Cell, separator: str) -> str:
+def _display_width(text: str) -> int:
+    return sum(2 if unicodedata.east_asian_width(ch) in "FW" else 1 for ch in text)
+
+
+def _greedy_wrap(tokens: list[str], width: int) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for token in tokens:
+        if current.strip() and token not in _NO_LINE_START and _display_width(current + token) > width:
+            lines.append(current.rstrip())
+            current = token.lstrip()
+        else:
+            current += token
+    if current.strip():
+        lines.append(current.rstrip())
+    return lines
+
+
+def wrap_label(text: str, width: int) -> str:
+    """表示幅 width を超えないよう折り返し、エスケープして `<br/>` で連結する。
+
+    末尾に 1〜2 文字だけの行が残らないよう、行数を保ったまま各行の幅を均す。
+    英数字の単語は途中で分割しない。width が 0 以下なら折り返さない。
+    """
+    if width <= 0:
+        return escape_label(text)
+    tokens = re.findall(r"[A-Za-z0-9_.:/()\-]+|\s+|.", text)
+    lines = _greedy_wrap(tokens, width)
+    target = -(-_display_width(text) // len(lines)) if lines else width
+    while target < width:
+        balanced = _greedy_wrap(tokens, target)
+        if len(balanced) <= len(lines):
+            lines = balanced
+            break
+        target += 1
+    return "<br/>".join(escape_label(line) for line in lines)
+
+
+def _cell_title(cell: Cell, separator: str, wrap: int) -> str:
     prefix = {"function": "@app.function ", "class": "@app.class_definition "}.get(cell.kind, "")
     title = ("⏳ " if cell.is_async else "") + escape_label(prefix + cell.name)
     if cell.summary:
-        title += separator + escape_label(cell.summary)
+        title += separator + wrap_label(cell.summary, wrap)
     return title
 
 
-def render_mermaid(notebook: Notebook, *, compact: bool = False, show_imports: bool = False) -> str:
+def render_mermaid(
+    notebook: Notebook,
+    *,
+    compact: bool = False,
+    show_imports: bool = False,
+    direction: str = DEFAULT_DIRECTION,
+    wrap: int = DEFAULT_WRAP_WIDTH,
+) -> str:
     """Notebook を Mermaid の flowchart に変換する。
 
     Args:
         notebook: 解析済みの Notebook。
         compact: True ならセル単位の簡易図 (UI 要素・呼び出しを省略) にする。
         show_imports: True なら `import x` で得たモジュール変数 (mo, os など) の受け渡しも描く。
+        direction: 図の向き (LR / TD など)。
+        wrap: ラベルを折り返す表示幅。0 以下なら折り返さない。
 
     Returns:
         Mermaid のソース。
     """
-    lines = ["flowchart TD"]
+    lines = [f"flowchart {direction}"]
     owner: dict[str, Cell] = {}
     ui_ids: dict[str, str] = {}
     for cell in notebook.cells:
@@ -427,15 +482,18 @@ def render_mermaid(notebook: Notebook, *, compact: bool = False, show_imports: b
     call_edges: list[str] = []
     for cell in notebook.cells:
         if not compact and cell.ui_elements:
-            lines.append(f'  subgraph {cell.node_id}["{_cell_title(cell, " — ")}"]')
+            # サブグラフの見出し欄は 3 行目以降が見切れるため、DocString は折り返さない
+            lines.append(f'  subgraph {cell.node_id}["{_cell_title(cell, "<br/>", 0)}"]')
             for j, ui in enumerate(cell.ui_elements):
                 ui_id = f"{cell.node_id}_u{j}"
                 ui_ids[ui.name] = ui_id
-                label = f"{ui.name}: {ui.kind}" + (f"「{ui.label}」" if ui.label else "")
-                lines.append(f'    {ui_id}[/"{escape_label(label)}"/]')
+                label = escape_label(f"{ui.name}: {ui.kind}")
+                if ui.label:
+                    label += "<br/>" + wrap_label(f"「{ui.label}」", wrap)
+                lines.append(f'    {ui_id}[/"{label}"/]')
             lines.append("  end")
         else:
-            title = _cell_title(cell, "<br/>")
+            title = _cell_title(cell, "<br/>", wrap)
             lines.append(f'  {cell.node_id}(["{title}"])' if cell.is_view else f'  {cell.node_id}["{title}"]')
         if compact:
             continue
@@ -444,7 +502,7 @@ def render_mermaid(notebook: Notebook, *, compact: bool = False, show_imports: b
                 call_ids[call.qualname] = f"f{len(call_ids)}"
                 label = escape_label(f"{call.short_name}()")
                 if call.summary:
-                    label += "<br/>" + escape_label(call.summary)
+                    label += "<br/>" + wrap_label(call.summary, wrap)
                 lines.append(f'  {call_ids[call.qualname]}[["{label}"]]')
             call_edges.append(f"  {cell.node_id} -.-> {call_ids[call.qualname]}")
 
@@ -511,6 +569,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR, help="出力先ディレクトリ")
     parser.add_argument("--root", type=Path, default=Path(), help="import 解決に使うプロジェクトルート")
     parser.add_argument("--compact", action="store_true", help="セル単位の簡易図にする")
+    parser.add_argument(
+        "--direction", choices=["LR", "TD"], default=DEFAULT_DIRECTION, help="図の向き (既定: %(default)s)"
+    )
+    parser.add_argument(
+        "--wrap", type=int, default=DEFAULT_WRAP_WIDTH, help="ラベルを折り返す表示幅。0 で無効 (既定: %(default)s)"
+    )
     parser.add_argument("--show-imports", action="store_true", help="mo, os などモジュール変数の受け渡しも描く")
     parser.add_argument("--stdout", action="store_true", help="ファイルに書かず標準出力へ出す")
     parser.add_argument("--check", action="store_true", help="出力ファイルが最新か検査するだけで書き込まない")
@@ -534,7 +598,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{source}:{issue.lineno}: [{severity}] {issue.message}", file=sys.stderr)
         failed |= bool(issues) and not args.warn_only
 
-        mermaid = render_mermaid(notebook, compact=args.compact, show_imports=args.show_imports)
+        mermaid = render_mermaid(
+            notebook,
+            compact=args.compact,
+            show_imports=args.show_imports,
+            direction=args.direction,
+            wrap=args.wrap,
+        )
         content = render_markdown(notebook, mermaid, issues, source)
         if args.stdout:
             print(content, end="")

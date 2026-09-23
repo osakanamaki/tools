@@ -18,6 +18,7 @@ from scripts.marimo_flow import (
     render_markdown,
     render_mermaid,
     resolve_references,
+    wrap_label,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -318,10 +319,11 @@ def test_escape_label() -> None:
 def test_render_detailed(project: Path) -> None:
     """詳細図に UI 要素・呼び出し・変数ラベル付きの矢印が含まれることを検証する。"""
     mermaid = render_mermaid(load(project))
-    assert mermaid.startswith("flowchart TD\n")
-    assert '  subgraph c1["inputs — 入力フォーム"]' in mermaid
-    assert '    c1_u0[/"name_input: text「名前」"/]' in mermaid
-    assert '    c1_u1[/"go: run_button「実行」"/]' in mermaid
+    # 浅く広い DAG が GitHub で縮小されないよう、既定は横向き
+    assert mermaid.startswith("flowchart LR\n")
+    assert '  subgraph c1["inputs<br/>入力フォーム"]' in mermaid
+    assert '    c1_u0[/"name_input: text<br/>「名前」"/]' in mermaid
+    assert '    c1_u1[/"go: run_button<br/>「実行」"/]' in mermaid
     assert '  c3(["view<br/>表示"])' in mermaid
     assert '  c4(["⏳ fetch<br/>非同期取得"])' in mermaid
     assert '  f0[["greet()<br/>名前付きの挨拶を返す。"]]' in mermaid
@@ -364,6 +366,40 @@ def test_render_shared_call_node_once(project: Path) -> None:
     assert "  c0 -.-> f0" in mermaid
     assert "  c1 -.-> f0" in mermaid
     assert '  c0 -->|"greet"| c1' in mermaid
+
+
+def test_render_direction_and_wrap(project: Path) -> None:
+    """図の向きと折り返し幅を指定できることを検証する。"""
+    notebook = load(project)
+    assert render_mermaid(notebook, direction="TD").startswith("flowchart TD\n")
+    assert '"imports<br/>共通モジュー<br/>ルの読み込み"' in render_mermaid(notebook, wrap=16)
+    assert '"imports<br/>共通モジュールの読み込み"' in render_mermaid(notebook, wrap=0)
+
+
+def test_subgraph_title_is_not_wrapped(project: Path) -> None:
+    """サブグラフの見出しは 3 行目以降が見切れるため、セル名と DocString の 2 行に収めることを検証する。"""
+    mermaid = render_mermaid(load(project), wrap=6)
+    assert '  subgraph c1["inputs<br/>入力フォーム"]' in mermaid
+    # 通常ノードは折り返す
+    assert '"imports<br/>共通モ<br/>ジュー<br/>ルの読<br/>み込み"' in mermaid
+
+
+def test_wrap_label_keeps_short_text() -> None:
+    """折り返し幅に収まる文字列はそのまま (エスケープのみ) 返すことを検証する。"""
+    assert wrap_label('短い "説明"', 30) == "短い #34;説明#34;"
+    assert wrap_label("", 30) == ""
+
+
+def test_wrap_label_balances_lines() -> None:
+    """末尾に短い行を残さず、各行の幅を均して折り返すことを検証する。"""
+    # 貪欲法なら「Wake-on-LAN 用の UI 入力フォー」「ム」になる
+    assert wrap_label("Wake-on-LAN 用の UI 入力フォーム", 30) == "Wake-on-LAN 用の<br/>UI 入力フォーム"
+
+
+def test_wrap_label_keeps_words_and_line_start_rule() -> None:
+    """英数字の単語を分割せず、閉じ括弧・句読点を行頭に置かないことを検証する。"""
+    assert wrap_label("send_magic_packet_to_target を呼ぶ", 10) == "send_magic_packet_to_target<br/>を呼ぶ"
+    assert wrap_label("あいうえお（かきく）。", 10) == "あいうえお<br/>（かきく）。"
 
 
 def test_render_compact(project: Path) -> None:
