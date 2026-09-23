@@ -7,7 +7,8 @@ app = marimo.App(width="medium")
 
 
 @app.cell
-def _():
+def imports():
+    """共通モジュールの読み込み"""
     import os
 
     import marimo as mo

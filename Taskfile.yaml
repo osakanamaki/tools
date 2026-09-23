@@ -18,6 +18,11 @@ tasks:
     cmds:
       - uv run marimo run src/apps --watch
 
+  flow:
+    desc: "marimo アプリのフロー図 (docs/flows/) を生成"
+    cmds:
+      - uv run python scripts/marimo_flow.py {{.CLI_ARGS}}
+
   lint:
     desc: "静的解析"
     cmds:
@@ -27,6 +32,7 @@ tasks:
       - uv run ruff check .
       - uv run ty check
       - uv run marimo check src/apps/ --fix
+      - uv run python scripts/marimo_flow.py --check
 
   test:
     desc: "この品質を満たすこと"
@@ -34,4 +40,4 @@ tasks:
       - task: lint
       # ロジックテストのみ網羅する。
       # GUI層は人間によるレビューを優先する。
-      - uv run pytest -n auto --cov=src/core --cov=src/components --cov-fail-under=95 --cov-report=html:coverage
+      - uv run pytest -n auto --cov=src/core --cov=src/components --cov=scripts --cov-fail-under=95 --cov-report=html:coverage
